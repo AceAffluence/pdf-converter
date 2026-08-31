@@ -1,21 +1,21 @@
 # Ace's Super Cool Magic Converter Tool
 
-Turn a saved play-by-post forum thread into a clean, readable PDF — no usernames,
+Turn a saved play-by-post forum thread into a clean, readable PDF. No usernames,
 no forum chrome, no quoted-back text. Just the story.
 
 ## What it does
 
 Play-by-post threads are great to read while they're happening and miserable to
-read afterward. The story is buried under signatures, avatars, OOC blocks, and
-fifteen layers of quoted text. This pulls the actual prose out and lays it into a
-PDF you can keep.
+read afterward when you need to find something. The story is buried under signatures, 
+avatars, OOC blocks, andfifteen layers of quoted text. This pulls the actual prose out 
+and lays it into a PDF you can easily search.
 
 - Extracts post content and drops the surrounding forum furniture
 - Preserves **bold**, *italic*, and text colors
 - Strips quoted-back text by default (toggleable)
 - Merges multiple pages of the same thread, sorted naturally
   (`page2` before `page10`, as it should be)
-- Runs entirely in your browser — nothing is uploaded anywhere
+- Runs entirely in your browser. Nothing is uploaded anywhere
 
 ## How to use it
 
