@@ -69,8 +69,3 @@ A few things that took more care than expected:
   [Source Serif 4](https://fonts.google.com/specimen/Source+Serif+4), loaded from
   Google Fonts (the only external request the page makes; it falls back to system
   fonts if unavailable).
-
-## Contact
-
-Questions or flattering comments: PM **AceAffluence** on RPGX.
-Unflattering comments: cash me outside.
