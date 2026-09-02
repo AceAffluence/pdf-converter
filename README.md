@@ -3,7 +3,7 @@
 Turn a saved play-by-post forum thread into a clean, readable file — no usernames,
 no forum chrome, no quoted-back text. Just the story.
 
-**[Use it here →](https://YOUR-USERNAME.github.io/YOUR-REPO/)**
+**[Use it here →](https://aceaffluence.github.io/pdf-converter/)**
 
 ## What it does
 
