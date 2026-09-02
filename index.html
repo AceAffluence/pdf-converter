@@ -403,10 +403,17 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
     --accent-soft: rgba(0, 229, 255, 0.1);
     --error: #FF4A6D;
   }
+  /* Gradient lives on <html> and is pinned to the viewport, so overscroll
+     (rubber-banding past the top or bottom) has nothing blank to reveal. */
+  html {
+    background-color: #0B0F19;
+    background-image: linear-gradient(135deg, #0B0F19 0%, #1A0B2E 100%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+  }
   html, body { margin: 0; min-height: 100vh; }
   body {
-    /* Deep arcane twilight gradient */
-    background: linear-gradient(135deg, #0B0F19 0%, #1A0B2E 100%);
+    background: transparent;
     font-family: 'Inter', system-ui, sans-serif;
     color: var(--ink);
     display: flex;
@@ -581,6 +588,23 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
       text-shadow: 0 0 8px rgba(0, 229, 255, 0.45);
     }
   }
+
+  /* ---- output format selector ---- */
+  .fmt-group { display: flex; gap: 6px; }
+  .fmt-btn {
+    flex: 1; padding: 9px 0; border-radius: 10px; cursor: pointer;
+    font-family: inherit; font-size: 13.5px; font-weight: 600;
+    background: rgba(255,255,255,0.05); color: var(--muted);
+    border: 1px solid var(--line); transition: all .15s ease;
+  }
+  .fmt-btn:hover { color: var(--ink); border-color: rgba(255,255,255,0.3); }
+  .fmt-btn.active {
+    background: rgba(0, 229, 255, 0.14);
+    color: #9FF3FF;
+    border-color: rgba(0, 229, 255, 0.55);
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.16);
+  }
+  .fmt-hint { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -606,12 +630,20 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
 
   <div class="card">
     <h2>2. Options</h2>
-    <label class="field" for="titleInput">Title (shown at the top of the PDF)</label>
+    <label class="field" for="titleInput">Title (shown at the top of the file)</label>
     <input type="text" id="titleInput" placeholder="e.g. The Grand Heist" />
     <label class="toggle">
       <input type="checkbox" id="keepQuotes" />
       Keep quoted-back text (off strips "originally posted by…" quote blocks)
     </label>
+
+    <label class="field" style="margin-top:18px;">Output format</label>
+    <div class="fmt-group" id="fmtGroup">
+      <button type="button" class="fmt-btn" data-fmt="md">Markdown</button>
+      <button type="button" class="fmt-btn" data-fmt="txt">Plain text</button>
+      <button type="button" class="fmt-btn" data-fmt="pdf">PDF</button>
+    </div>
+    <p class="fmt-hint" id="fmtHint"></p>
     <button class="primary" id="buildBtn" disabled>Choose files first</button>
     
     <!-- Flavor Text and Status -->
@@ -776,7 +808,7 @@ function escapeHtml(s) {
 const BOLD_TAGS = new Set(["B", "STRONG"]);
 const ITALIC_TAGS = new Set(["I", "EM"]);
 const SKIP_TAGS = new Set(["SCRIPT", "STYLE"]);
-const BLOCK_TAGS = new Set(["DIV", "P", "LI"]);
+const BLOCK_TAGS = new Set(["DIV", "P", "LI", "LEGEND", "FIELDSET", "TR", "H1", "H2", "H3", "H4", "H5", "H6"]);
 
 function nodeToRichText(node, dropQuotes) {
   let out = "";
@@ -835,6 +867,67 @@ function extractPostsFromHtml(raw, dropQuotes) {
   if (postDivs.length) posts = postDivs.map((div) => tidy(nodeToRichText(div, dropQuotes)));
   else if (looksLikeBBCode(raw)) posts = [tidy(bbcodeToRichText(raw))];
   return posts.filter((p) => p.trim());
+}
+
+/* ---- TEXT EXPORTERS: Markdown and plain text ----
+   These keep Unicode intact, unlike the PDF path which must fold smart
+   punctuation down to WinAnsi for jsPDF's built-in fonts. */
+
+function decodeEntities(str) {
+  return str.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+function escapeMd(str) {
+  return str.replace(/([\\`*_{}\[\]#+])/g, "\\$1");
+}
+
+function richToMarkdown(text) {
+  let out = "";
+  const tagRe = /<(\/?)(b|i|font)(?:\s+color="([^"]*)")?>/gi;
+  let m, last = 0;
+  while ((m = tagRe.exec(text)) !== null) {
+    out += escapeMd(decodeEntities(text.slice(last, m.index)));
+    const tag = m[2].toLowerCase();
+    if (tag === "b") out += "**";
+    else if (tag === "i") out += "*";
+    /* colour has no Markdown equivalent: drop the tag, keep the text */
+    last = tagRe.lastIndex;
+  }
+  return out + escapeMd(decodeEntities(text.slice(last)));
+}
+
+function richToPlain(text) {
+  return decodeEntities(text.replace(/<\/?(b|i|font)(?:\s+color="[^"]*")?>/gi, ""));
+}
+
+function buildMarkdown(posts, title) {
+  const parts = ["# " + title, ""];
+  posts.forEach((p, i) => {
+    parts.push("## Post " + (i + 1), "");
+    parts.push(richToMarkdown(p).trim(), "");
+  });
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+function buildPlainText(posts, title) {
+  const parts = [title, "=".repeat(Math.min(title.length, 60)), ""];
+  posts.forEach((p, i) => {
+    parts.push("--- Post " + (i + 1) + " ---", "");
+    parts.push(richToPlain(p).trim(), "");
+  });
+  return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+
+function downloadText(content, filename, mime) {
+  const blob = new Blob([content], { type: mime + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function parseRuns(html) {
@@ -1001,7 +1094,7 @@ function renderFileList() {
     fileListEl.appendChild(row);
   });
   buildBtn.disabled = files.length === 0;
-  buildBtn.textContent = files.length ? `Build PDF from ${files.length} page${files.length > 1 ? "s" : ""}` : "Choose files first";
+  buildBtn.textContent = files.length ? `Build ${FORMATS[format].label} from ${files.length} page${files.length > 1 ? "s" : ""}` : "Choose files first";
 }
 
 function readFileAsBuffer(file) {
@@ -1017,6 +1110,33 @@ function slugify(s) {
   return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "rpgx-archive";
 }
 
+/* ---- output format ---- */
+const FORMATS = {
+  md:  { label: "Markdown", ext: "md",  mime: "text/markdown",
+         hint: "Best for feeding into an LLM — keeps bold and italic as markup." },
+  txt: { label: "Plain text", ext: "txt", mime: "text/plain",
+         hint: "Smallest and simplest. All formatting is stripped." },
+  pdf: { label: "PDF", ext: "pdf", mime: "application/pdf",
+         hint: "Best for reading or archiving. Keeps colors and layout." },
+};
+let format = "md";
+
+const fmtGroup = document.getElementById("fmtGroup");
+const fmtHint = document.getElementById("fmtHint");
+
+function setFormat(f) {
+  format = f;
+  fmtGroup.querySelectorAll(".fmt-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.fmt === f)
+  );
+  fmtHint.textContent = FORMATS[f].hint;
+  renderFileList();
+}
+fmtGroup.querySelectorAll(".fmt-btn").forEach((b) =>
+  b.addEventListener("click", () => setFormat(b.dataset.fmt))
+);
+setFormat("md");
+
 buildBtn.addEventListener("click", async () => {
   statusEl.textContent = "";
   statusEl.className = "status";
@@ -1028,7 +1148,6 @@ buildBtn.addEventListener("click", async () => {
   let cycle = setInterval(getRandomFlavor, 1200);
 
   try {
-    const jsPDFCtor = await window.__jspdfReady;
     const dropQuotes = !keepQuotes.checked;
     let allPosts = [];
     let emptyFiles = [];
@@ -1036,7 +1155,10 @@ buildBtn.addEventListener("click", async () => {
     for (const file of files) {
       const buf = await readFileAsBuffer(file);
       const raw = decodeBuffer(buf);
-      const posts = extractPostsFromHtml(raw, dropQuotes).map(sanitizeForPdf);
+      /* Only the PDF path needs punctuation folded to WinAnsi; the text
+         formats are UTF-8 and keep curly quotes and dashes intact. */
+      let posts = extractPostsFromHtml(raw, dropQuotes);
+      if (format === "pdf") posts = posts.map(sanitizeForPdf);
       if (posts.length === 0) emptyFiles.push(file.name);
       allPosts = allPosts.concat(posts);
     }
@@ -1049,9 +1171,20 @@ buildBtn.addEventListener("click", async () => {
     }
 
     const title = titleInput.value.trim() || "RPGX Thread Archive";
-    const doc = new jsPDFCtor({ unit: "pt", format: "letter" });
-    buildPdf(doc, allPosts, title);
-    doc.save(`${slugify(title)}.pdf`);
+    const fmt = FORMATS[format];
+    const filename = `${slugify(title)}.${fmt.ext}`;
+
+    if (format === "pdf") {
+      const jsPDFCtor = await window.__jspdfReady;
+      const doc = new jsPDFCtor({ unit: "pt", format: "letter" });
+      buildPdf(doc, allPosts, title);
+      doc.save(filename);
+    } else {
+      const content = format === "md"
+        ? buildMarkdown(allPosts, title)
+        : buildPlainText(allPosts, title);
+      downloadText(content, filename, fmt.mime);
+    }
 
     let msg = `Done — extracted ${allPosts.length} post${allPosts.length > 1 ? "s" : ""} across ${files.length} file${files.length > 1 ? "s" : ""}.`;
     if (emptyFiles.length) msg += ` No posts found in: ${emptyFiles.join(", ")}.`;
